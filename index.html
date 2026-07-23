@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Espaço Renovar</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap');
 
@@ -296,6 +296,17 @@ html,body{max-width:100vw;overflow-x:hidden}
 .hslot.active{background:var(--dourado-pale);border-color:var(--dourado);color:#8a6820;font-weight:500}
 .hslot.blocked{background:#fff5f5;border-color:#f5d0d0;color:#c0392b}
 
+/* ── Fotos dos serviços ── */
+.sfoto{width:58px;height:58px;object-fit:cover;border-radius:3px;flex-shrink:0;border:1px solid var(--cinza-b);cursor:zoom-in;background:var(--cinza-f)}
+.sver{font-size:10px;color:var(--rosa-dark);margin-top:5px;cursor:zoom-in;letter-spacing:.04em;display:inline-block}
+.sver:hover{text-decoration:underline}
+.tfoto{width:42px;height:42px;object-fit:cover;border-radius:3px;border:1px solid var(--cinza-b);cursor:zoom-in;flex-shrink:0}
+.tfoto-vazia{width:42px;height:42px;border-radius:3px;border:1px dashed var(--cinza-b);background:var(--cinza-f);flex-shrink:0}
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;display:none;align-items:center;justify-content:center;padding:24px;cursor:zoom-out}
+#lightbox img{max-width:100%;max-height:88vh;object-fit:contain;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+#lightbox p{position:absolute;bottom:18px;left:0;right:0;text-align:center;color:rgba(255,255,255,.6);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+@media(max-width:768px){.sfoto{width:64px;height:64px}}
+
 /* ── Login ── */
 .login-page{min-height:100vh;display:flex}
 .login-left{width:280px;background:var(--preto);display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:44px 28px;border-right:2px solid var(--dourado)}
@@ -305,6 +316,11 @@ html,body{max-width:100vw;overflow-x:hidden}
 <body>
 
 <div id="toast"></div>
+
+<div id="lightbox" onclick="fecharFoto()">
+  <img id="lightbox-img" src="" alt="">
+  <p>Toque para fechar</p>
+</div>
 
 <!-- ══════════════════════════════════════════════════
      LOGIN DO ADMIN
@@ -595,10 +611,22 @@ html,body{max-width:100vw;overflow-x:hidden}
       <label class="flb">Descrição (opcional)</label>
       <input class="fi" id="svc-descricao" placeholder="Breve descrição do serviço">
     </div>
+    <div class="fl">
+      <label class="flb">Foto do serviço (opcional)</label>
+      <div style="display:flex;align-items:flex-start;gap:14px">
+        <img id="svc-foto-preview" src="" alt="" style="display:none;width:74px;height:74px;object-fit:cover;border-radius:3px;border:1px solid var(--cinza-b);flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <input type="file" id="svc-foto" accept="image/*" onchange="previewFoto()" style="width:100%;font-size:12px;font-family:'Jost',sans-serif">
+          <p style="font-size:10px;color:var(--text-pale);margin-top:6px;line-height:1.5">JPG ou PNG, até 5 MB. A cliente vê essa foto na hora de agendar.</p>
+          <button type="button" id="svc-foto-remover" class="bdanger" style="font-size:9px;padding:4px 9px;margin-top:8px;display:none" onclick="removerFoto()">Remover foto</button>
+        </div>
+      </div>
+    </div>
     <input type="hidden" id="svc-id">
+    <input type="hidden" id="svc-foto-url">
     <div style="display:flex;gap:10px;margin-top:8px">
       <button class="bo" style="flex:1" onclick="fecharModalServico()">Cancelar</button>
-      <button class="bp" style="flex:1" onclick="salvarServico()">Salvar serviço</button>
+      <button class="bp" style="flex:1" id="btn-salvar-servico" onclick="salvarServico()">Salvar serviço</button>
     </div>
   </div>
 </div>
@@ -611,7 +639,9 @@ const SUPABASE_URL  = 'https://zqivgtclzpnntbczbmeo.supabase.co'
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxaXZndGNsenBubnRiY3pibWVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1OTM0MjUsImV4cCI6MjEwMDE2OTQyNX0.u2VKww96OGB_tYwRLSzmTlPgWWFPf6wowPxLWAVw5ec'
 const WHATSAPP_DONO = '5581996032769' // número do dono com código do país
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON)
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { persistSession: true, autoRefreshToken: true }
+})
 
 // ── Estado global ──────────────────────────────
 let state = {
@@ -689,6 +719,16 @@ async function verificarSessao() {
 // ════════════════════════════════════════════════
 // AGENDAMENTO PÚBLICO
 // ════════════════════════════════════════════════
+function verFoto(url, ev) {
+  if (ev) ev.stopPropagation()
+  document.getElementById('lightbox-img').src = url
+  document.getElementById('lightbox').style.display = 'flex'
+}
+
+function fecharFoto() {
+  document.getElementById('lightbox').style.display = 'none'
+}
+
 async function carregarServicosPublico() {
   const { data, error } = await sb.from('servicos').select('*').eq('ativo', true).order('nome')
   if (error) { toast('Erro ao carregar serviços.', 'error'); return }
@@ -700,22 +740,26 @@ function renderServicosPublico() {
   const el = document.getElementById('lista-servicos')
   if (!state.servicos.length) { el.innerHTML = '<p style="font-size:12px;color:#bbb">Nenhum serviço cadastrado.</p>'; return }
   el.innerHTML = state.servicos.map(s => `
-    <div class="scard" onclick="selecionarServico(this,'${s.id}','${s.nome}',${s.preco},${s.duracao_min})">
+    <div class="scard" onclick="selecionarServico(this,'${s.id}')">
       <div class="scheck"></div>
-      <div style="flex:1">
-        <p style="font-size:13px;font-weight:400;color:#1a1a1a">${s.nome}</p>
-        <p style="font-size:10px;color:#aaa;margin-top:2px">${s.duracao_min} min${s.descricao ? ' · ' + s.descricao : ''}</p>
+      ${s.foto_url ? `<img class="sfoto" src="${s.foto_url}" alt="${s.nome}" onclick="verFoto('${s.foto_url}',event)">` : ''}
+      <div style="flex:1;min-width:0">
+        <p style="font-size:14px;font-weight:400;color:var(--text)">${s.nome}</p>
+        <p style="font-size:11px;color:var(--text-pale);margin-top:3px">${s.duracao_min} min${s.descricao ? ' · ' + s.descricao : ''}</p>
+        ${s.foto_url ? `<span class="sver" onclick="verFoto('${s.foto_url}',event)">Ver foto ampliada</span>` : ''}
       </div>
-      <p style="font-size:13px;color:#888;flex-shrink:0">R$ ${Number(s.preco).toFixed(2).replace('.',',')}</p>
+      <p style="font-size:14px;color:var(--text-soft);flex-shrink:0">R$ ${Number(s.preco).toFixed(2).replace('.',',')}</p>
     </div>
   `).join('')
 }
 
-function selecionarServico(el, id, nome, preco, duracao) {
+function selecionarServico(el, id) {
+  const s = (state.servicos || []).find(x => x.id === id)
+  if (!s) return
   document.querySelectorAll('.scard').forEach(c => { c.classList.remove('on'); c.querySelector('.scheck').innerHTML = '' })
   el.classList.add('on')
   el.querySelector('.scheck').innerHTML = '✓'
-  state.servicoSelecionado = { id, nome, preco, duracao }
+  state.servicoSelecionado = { id: s.id, nome: s.nome, preco: s.preco, duracao: s.duracao_min }
   atualizarSteps()
   atualizarResumo()
   verificarPodeConfirmar()
@@ -863,7 +907,13 @@ async function confirmarAgendamento() {
     status: 'confirmado'
   })
 
-  if (error) { toast('Erro ao confirmar. Tente novamente.', 'error'); btn.disabled = false; btn.textContent = 'Confirmar agendamento'; return }
+  if (error) {
+    console.error('Erro Supabase:', error)
+    toast('Erro ao confirmar: ' + (error.message || 'Tente novamente.'), 'error')
+    btn.disabled = false
+    btn.textContent = 'Confirmar agendamento'
+    return
+  }
 
   // Notificar dono por WhatsApp
   const msg = encodeURIComponent(`🌸 *Novo agendamento!*\n\n👤 Cliente: ${nome}\n📱 WhatsApp: ${whatsapp}\n✂️ Serviço: ${state.servicoSelecionado.nome}\n📅 Data: ${state.dataSelecionada}\n⏰ Hora: ${state.horaSelecionada}\n💰 Valor: R$ ${Number(state.servicoSelecionado.preco).toFixed(2).replace('.',',')}`)
@@ -998,6 +1048,7 @@ async function carregarDia(dateStr) {
 // ── Serviços admin ─────────────────────────────
 async function carregarServicosAdmin() {
   const { data } = await sb.from('servicos').select('*').order('nome')
+  state.servicosAdmin = data || []
   const lista = document.getElementById('lista-servicos-admin')
   if (!data || !data.length) { lista.innerHTML = '<p style="font-size:12px;color:#bbb">Nenhum serviço.</p>'; return }
   lista.innerHTML = `
@@ -1016,15 +1067,22 @@ async function carregarServicosAdmin() {
           ${data.map(s => `
             <tr style="border-bottom:1px solid #f8f4f4">
               <td style="padding:12px 14px">
-                <p style="font-size:12px;font-weight:400;color:#1a1a1a">${s.nome}</p>
-                ${s.descricao ? `<p style="font-size:10px;color:#bbb;margin-top:2px">${s.descricao}</p>` : ''}
+                <div style="display:flex;align-items:center;gap:11px">
+                  ${s.foto_url
+                    ? `<img class="tfoto" src="${s.foto_url}" alt="" onclick="verFoto('${s.foto_url}',event)">`
+                    : `<div class="tfoto-vazia"></div>`}
+                  <div>
+                    <p style="font-size:12px;font-weight:400;color:var(--text)">${s.nome}</p>
+                    ${s.descricao ? `<p style="font-size:10px;color:var(--text-pale);margin-top:2px">${s.descricao}</p>` : ''}
+                  </div>
+                </div>
               </td>
               <td style="padding:12px 14px;font-size:12px;color:#888">${s.duracao_min} min</td>
               <td style="padding:12px 14px;font-size:12px;color:#1a1a1a;font-weight:400">R$ ${Number(s.preco).toFixed(2).replace('.',',')}</td>
               <td style="padding:12px 14px">${s.ativo ? '<span class="tgn">Ativo</span>' : '<span class="tgy">Inativo</span>'}</td>
               <td style="padding:12px 14px">
                 <div style="display:flex;gap:6px">
-                  <button class="bpk" style="font-size:9px;padding:5px 10px" onclick="editarServico('${s.id}','${s.nome}',${s.preco},${s.duracao_min},'${s.descricao||''}')">Editar</button>
+                  <button class="bpk" style="font-size:9px;padding:5px 10px" onclick="editarServico('${s.id}')">Editar</button>
                   <button class="bdanger" style="font-size:9px;padding:5px 10px" onclick="excluirServico('${s.id}')">Excluir</button>
                   <button class="bo" style="font-size:9px;padding:5px 10px;width:auto" onclick="toggleServico('${s.id}',${s.ativo})">${s.ativo ? 'Desativar' : 'Ativar'}</button>
                 </div>
@@ -1045,18 +1103,54 @@ function abrirModalServico() {
   document.getElementById('svc-preco').value = ''
   document.getElementById('svc-duracao').value = ''
   document.getElementById('svc-descricao').value = ''
+  limparFoto()
   document.getElementById('modal-servico').style.display = 'flex'
 }
 
-function editarServico(id, nome, preco, duracao, descricao) {
+function editarServico(id) {
+  const s = (state.servicosAdmin || []).find(x => x.id === id)
+  if (!s) return
   state.editandoServicoId = id
   document.getElementById('modal-servico-titulo').textContent = 'Editar Serviço'
-  document.getElementById('svc-id').value = id
-  document.getElementById('svc-nome').value = nome
-  document.getElementById('svc-preco').value = preco
-  document.getElementById('svc-duracao').value = duracao
-  document.getElementById('svc-descricao').value = descricao
+  document.getElementById('svc-id').value = s.id
+  document.getElementById('svc-nome').value = s.nome
+  document.getElementById('svc-preco').value = s.preco
+  document.getElementById('svc-duracao').value = s.duracao_min
+  document.getElementById('svc-descricao').value = s.descricao || ''
+  limparFoto()
+  if (s.foto_url) {
+    document.getElementById('svc-foto-url').value = s.foto_url
+    const img = document.getElementById('svc-foto-preview')
+    img.src = s.foto_url
+    img.style.display = 'block'
+    document.getElementById('svc-foto-remover').style.display = 'inline-flex'
+  }
   document.getElementById('modal-servico').style.display = 'flex'
+}
+
+function limparFoto() {
+  document.getElementById('svc-foto').value = ''
+  document.getElementById('svc-foto-url').value = ''
+  const img = document.getElementById('svc-foto-preview')
+  img.src = ''
+  img.style.display = 'none'
+  document.getElementById('svc-foto-remover').style.display = 'none'
+}
+
+function removerFoto() { limparFoto() }
+
+function previewFoto() {
+  const f = document.getElementById('svc-foto').files[0]
+  if (!f) return
+  if (f.size > 5 * 1024 * 1024) {
+    toast('Foto muito grande. Máximo 5 MB.', 'error')
+    document.getElementById('svc-foto').value = ''
+    return
+  }
+  const img = document.getElementById('svc-foto-preview')
+  img.src = URL.createObjectURL(f)
+  img.style.display = 'block'
+  document.getElementById('svc-foto-remover').style.display = 'inline-flex'
 }
 
 function fecharModalServico() {
@@ -1072,16 +1166,48 @@ async function salvarServico() {
 
   if (!nome || !preco || !duracao) { toast('Preencha nome, preço e duração.', 'error'); return }
 
-  const dados = { nome, preco, duracao_min: duracao, descricao, ativo: true }
+  const btn = document.getElementById('btn-salvar-servico')
+  btn.disabled = true
+
+  // Foto: envia o arquivo novo (se houver) para o Storage
+  let fotoUrl = document.getElementById('svc-foto-url').value || null
+  const arquivo = document.getElementById('svc-foto').files[0]
+
+  if (arquivo) {
+    btn.textContent = 'Enviando foto...'
+    const ext = (arquivo.name.split('.').pop() || 'jpg').toLowerCase()
+    const caminho = `servico-${Date.now()}.${ext}`
+    const { error: upErro } = await sb.storage.from('servicos')
+      .upload(caminho, arquivo, { upsert: true, contentType: arquivo.type })
+    if (upErro) {
+      console.error('Erro no upload da foto:', upErro)
+      toast('Erro ao enviar a foto: ' + (upErro.message || ''), 'error')
+      btn.disabled = false
+      btn.textContent = 'Salvar serviço'
+      return
+    }
+    fotoUrl = sb.storage.from('servicos').getPublicUrl(caminho).data.publicUrl
+  }
+
+  btn.textContent = 'Salvando...'
+  const dados = { nome, preco, duracao_min: duracao, descricao, foto_url: fotoUrl }
 
   let error
   if (id) {
     ({ error } = await sb.from('servicos').update(dados).eq('id', id))
   } else {
-    ({ error } = await sb.from('servicos').insert(dados))
+    dados.ativo = true
+    ;({ error } = await sb.from('servicos').insert(dados))
   }
 
-  if (error) { toast('Erro ao salvar.', 'error'); return }
+  btn.disabled = false
+  btn.textContent = 'Salvar serviço'
+
+  if (error) {
+    console.error('Erro ao salvar serviço:', error)
+    toast('Erro ao salvar: ' + (error.message || ''), 'error')
+    return
+  }
 
   toast(id ? 'Serviço atualizado!' : 'Serviço criado!')
   fecharModalServico()
